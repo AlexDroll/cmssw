@@ -9,6 +9,9 @@
 #include "DataFormats/Common/interface/DetSetVector.h"
 #include "DQMServices/Core/interface/DQMEDAnalyzer.h"
 #include "DataFormats/TrackerCommon/interface/TrackerTopology.h"
+#include "TTree.h"
+#include "TFile.h"
+
 
 class MonitorElement;
 class PixelDigi;
@@ -61,6 +64,13 @@ private:
   std::map<unsigned int, DigiMEs> layerMEs;
   //  std::map<unsigned int, std::map<unsigned int ,DigiMEs>> ringMEs;
   bool pixelFlag_;
+  uint eventCounter_;
+  uint adc_;
+  uint row_;
+  uint col_;
+  uint rawid_;
+  TTree* hitTree_;
+  //TTree* hitTree_;
   std::string geomType_;
   edm::InputTag otDigiSrc_;
   edm::InputTag itPixelDigiSrc_;

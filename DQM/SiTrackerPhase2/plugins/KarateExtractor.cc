@@ -41,7 +41,7 @@
 // DQM Histograming
 #include "DQMServices/Core/interface/MonitorElement.h"
 
-//
+
 // constructors
 //
 KarateExtractor::KarateExtractor(const edm::ParameterSet& iConfig)
@@ -53,6 +53,17 @@ KarateExtractor::KarateExtractor(const edm::ParameterSet& iConfig)
       otDigiToken_(consumes<edm::DetSetVector<PixelDigi>>(otDigiSrc_)),
       itPixelDigiToken_(consumes<edm::DetSetVector<PixelDigi>>(itPixelDigiSrc_)) {
   edm::LogInfo("KarateExtractor") << ">>> Construct KarateExtractor ";
+  eventCounter_ = 0;
+  
+  // generate the root tree to store the information:
+  hitTree_ = new TTree("2SHitTree", "Hits in the 2s modules"); 
+  hitTree_->Branch("eventCounter", &eventCounter_);
+  hitTree_->Branch("column", &col_);
+  hitTree_->Branch("row", &row_);
+  hitTree_->Branch("adc", &adc_);
+  hitTree_->Branch("detId", &rawid_);
+  
+  
 }
 
 //
@@ -62,6 +73,9 @@ KarateExtractor::~KarateExtractor() {
   // do anything here that needs to be done at desctruction time
   // (e.g. close files, deallocate resources etc.)
   edm::LogInfo("KarateExtractor") << ">>> Destroy KarateExtractor ";
+  TFile* outFile = new TFile("2sHits.root", "RECREATE");
+  hitTree_->Write();
+  outFile->Close();
 }
 
 // -- Analyze
@@ -75,7 +89,7 @@ void KarateExtractor::analyze(const edm::Event& iEvent, const edm::EventSetup& i
 
   edm::Handle<edm::DetSetVector<PixelDigi>> otDigiHandle;
   iEvent.getByToken(otDigiToken_, otDigiHandle);
-
+  std::cout << "Event:" << eventCounter_ << std::endl;
   // Tracker Topology
   iSetup.get<TrackerTopologyRcd>().get(tTopoHandle_);
 
@@ -89,6 +103,7 @@ void KarateExtractor::analyze(const edm::Event& iEvent, const edm::EventSetup& i
     else
       fillOTDigiHistos(otDigiHandle, geomHandle);
   }
+  eventCounter_++;
 }
 void KarateExtractor::fillITPixelDigiHistos(const edm::Handle<edm::DetSetVector<PixelDigi>> handle,
                                                      const edm::ESHandle<TrackerGeometry> gHandle) {
@@ -101,6 +116,8 @@ void KarateExtractor::fillITPixelDigiHistos(const edm::Handle<edm::DetSetVector<
        DSViter++) {
     unsigned int rawid = DSViter->id;
     edm::LogInfo("KarateExtractor") << " Det Id = " << rawid;
+    
+    
     int layer = tTopo->getITPixelLayerNumber(rawid);
     if (layer < 0)
       continue;
@@ -109,7 +126,6 @@ void KarateExtractor::fillITPixelDigiHistos(const edm::Handle<edm::DetSetVector<
       continue;
 
     const DetId detId(rawid);
-
     if (DetId(detId).det() != DetId::Detector::Tracker)
       continue;
 
@@ -223,6 +239,7 @@ void KarateExtractor::fillOTDigiHistos(const edm::Handle<edm::DetSetVector<Pixel
   const TrackerTopology* tTopo = tTopoHandle_.product();
   const TrackerGeometry* tGeom = gHandle.product();
 
+  // loop over all modules with hit
   for (typename edm::DetSetVector<PixelDigi>::const_iterator DSViter = digis->begin(); DSViter != digis->end();
        DSViter++) {
     unsigned int rawid = DSViter->id;
@@ -244,6 +261,8 @@ void KarateExtractor::fillOTDigiHistos(const edm::Handle<edm::DetSetVector<Pixel
     const GeomDet* geomDet = tGeom->idToDet(detId);
 
     const Phase2TrackerGeomDetUnit* tkDetUnit = dynamic_cast<const Phase2TrackerGeomDetUnit*>(gDetUnit);
+    
+    
     int nRows = tkDetUnit->specificTopology().nrows();
     int nColumns = tkDetUnit->specificTopology().ncolumns();
     if (nRows * nColumns == 0)
@@ -257,12 +276,22 @@ void KarateExtractor::fillOTDigiHistos(const edm::Handle<edm::DetSetVector<Pixel
     int position = 0;
     float frac_ot = 0.;
     for (typename edm::DetSet<PixelDigi>::const_iterator di = DSViter->begin(); di != DSViter->end(); di++) {
-      int col = di->column();  // column
-      int row = di->row();     // row
-      int adc = di->adc();
-      const DetId detId(rawid);
-      std::cout << "extractor: Hit in " << rawid << ": col " << col << ", row: " << row << ", ADC: " << adc << "(" << adc*135.0 << "e)" << std::endl;
-
+      int col = di->column(); 		col_ = di->column();// column
+      int row = di->row();    		row_ = di->row();  // row
+      int adc = di->adc();		adc_ = di->adc();
+      const DetId detId(rawid); 	rawid_ = rawid;
+      
+      if(tGeom->getDetectorType(detId) == TrackerGeometry::ModuleType::Ph2SS)
+	{
+	  MeasurementPoint mp(row + 0.5, col + 0.5);
+	  GlobalPoint pdPos = geomDet->surface().toGlobal(gDetUnit->topology().localPosition(mp));
+	  LocalPoint lPos = gDetUnit->topology().localPosition(mp);
+	  
+	  std::cout << "2S Modul ("<<rawid << "): col " << col << ", row: " << row << ", ADC: " << adc << "(" << adc*135.0 << "e)" << std::endl;
+	  std::cout << "   - xloc: " << pdPos.x() << " (" << lPos.x() << ")" << std::endl;
+	  std::cout << "   - yloc: " << pdPos.y() << " (" << lPos.y() << ")"  << std::endl;
+	  hitTree_->Fill();
+	}
       if (geomDet) {
         MeasurementPoint mp(row + 0.5, col + 0.5);
         GlobalPoint pdPos = geomDet->surface().toGlobal(gDetUnit->topology().localPosition(mp));

@@ -40,7 +40,9 @@
 
 // DQM Histograming
 #include "DQMServices/Core/interface/MonitorElement.h"
+#include "TVectorD.h"
 
+#include <fstream>
 
 // constructors
 //
@@ -55,15 +57,22 @@ KarateExtractor::KarateExtractor(const edm::ParameterSet& iConfig)
   edm::LogInfo("KarateExtractor") << ">>> Construct KarateExtractor ";
   eventCounter_ = 0;
   
+  
   // generate the root tree to store the information:
+  outFile_ = new TFile("2sHits.root", "RECREATE");
+  outFile_->cd();
+  //outFile_ = TFile::Open("2sHits.root","RECREATE");
   hitTree_ = new TTree("2SHitTree", "Hits in the 2s modules"); 
   hitTree_->Branch("eventCounter", &eventCounter_);
   hitTree_->Branch("column", &col_);
   hitTree_->Branch("row", &row_);
   hitTree_->Branch("adc", &adc_);
   hitTree_->Branch("detId", &rawid_);
-  
-  
+  hitTree_->Branch("subDetId", &subDetId_);
+  hitTree_->Branch("x" ,&x_);
+  hitTree_->Branch("y" ,&y_);
+  hitTree_->Branch("z" ,&z_);
+  //hitTree_->SetAutoSave(-5000);
 }
 
 //
@@ -73,9 +82,17 @@ KarateExtractor::~KarateExtractor() {
   // do anything here that needs to be done at desctruction time
   // (e.g. close files, deallocate resources etc.)
   edm::LogInfo("KarateExtractor") << ">>> Destroy KarateExtractor ";
-  TFile* outFile = new TFile("2sHits.root", "RECREATE");
+  
+  outFile_->cd();
+  TVectorD nevents(1);
+  nevents[0] = eventCounter_;
+  nevents.Write();
   hitTree_->Write();
-  outFile->Close();
+  //outFile_->Write();
+  //outFile->Write("2SHitTree");
+  outFile_->Close();
+  delete outFile_;
+  
 }
 
 // -- Analyze
